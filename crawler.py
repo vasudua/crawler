@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 from dataclasses import dataclass
 from typing import List
@@ -164,14 +165,17 @@ class CrawlDirector:
         await crawler.close_browser()
       return urls
 
-    results = []
+    results = {}
     with ThreadPoolExecutor(max_workers=50) as executor:
-      futures = [
-          executor.submit(asyncio.run, execute_crawler(domain))
+      futures_to_url = {
+          executor.submit(asyncio.run, execute_crawler(domain)): domain
           for domain in domains
-      ]
-      for future in as_completed(futures):
-        results.extend(future.result())
+      }
+      for future in as_completed(futures_to_url):
+        domain = futures_to_url[future]
+        results[domain] = future.result()
+    with open('results.json', 'w') as f:
+      json.dump(results, f)
     return results
 
 
@@ -180,4 +184,4 @@ def crawl(domains: List[str]) -> List[str]:
   return director.execute_crawlers(domains)
 
 
-print(crawl(['www.zara.com/in', 'myntra.com']))
+print(crawl(['www.zara.com/in', 'myntra.com', 'ajio.com', 'www2.hm.com/en_in']))
