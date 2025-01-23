@@ -1,11 +1,14 @@
 import asyncio
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import List
 from urllib.parse import urlparse
 from playwright.async_api import async_playwright
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+logging.basicConfig(level=logging.INFO)
 
 PRODUCT_PATTERNS = [
     re.compile(r'(.*/buy/*.*)'),
@@ -90,7 +93,7 @@ class Crawler:
 
         for link in links:
           if self._is_product_url(link):
-            print(f"Product URL: {link}")
+            logging.info(f"Product URL: {link}")
             self.product_urls.add(link)
           elif link not in self.visited_urls and not self._is_out_of_domain(
             link) and not self._is_ignore_url(link):
@@ -107,7 +110,7 @@ class Crawler:
 
       await page.close()
     except Exception as e:
-      print(f"Error crawling {self.domain}: {e}")
+      logging.error(f"Error crawling {self.domain}: {e}")
 
     return extracted_urls
 
@@ -155,7 +158,7 @@ class CrawlDirector:
     results: List[str] = []
 
     async def execute_crawler(domain: str) -> List[str]:
-      print(f"Executing crawler for {domain}")
+      logging.info(f"Executing crawler for {domain}")
 
       crawler: Crawler = Crawler(domain)
       try:
