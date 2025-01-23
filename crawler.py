@@ -6,14 +6,31 @@ from urllib.parse import urlparse
 from playwright.async_api import async_playwright
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-PATTERNS = [
+PRODUCT_PATTERNS = [
     re.compile(r'(.*/buy/*.*)'),
     re.compile(r'(.*-p[0-9]+\.(html).*)'),
     re.compile(r'(.*/(product)/.*)'),
-    re.compile(r'(.*/(shop)/.*)'),
     re.compile(r'(.*/(dp)/.*)'),
     re.compile(r'(.*/p/.*)'),
     re.compile(r'(.*(\/productpage)\.)\d+(\.html)')
+]
+
+PATTERNS_TO_IGNORE = [
+  re.compile(r'(.*/(contact).*)'),
+  re.compile(r'(.*/(about).*)'),
+  re.compile(r'(.*/(help).*)'),
+  re.compile(r'(.*/(faq).*)'),
+  re.compile(r'(.*/(privacy).*)'),
+  re.compile(r'(.*/(terms).*)'),
+  re.compile(r'(.*/(shipping).*)'),
+  re.compile(r'(.*/(log).*)'),
+  re.compile(r'(.*/(forgot).*)'),
+  re.compile(r'(.*/(cart).*)'),
+  re.compile(r'(.*/(checkout).*)'),
+  re.compile(r'(.*/(payment).*)'),
+  re.compile(r'(.*/(order).*)'),
+  re.compile(r'(.*/(return).*)'),
+  re.compile(r'(.*/(track).*)'),
 ]
 
 
@@ -58,7 +75,6 @@ class Crawler:
       await self.playwright.stop()
 
   async def extract_urls(self, url_to_visit: str) -> List[str]:
-    print(f"Extracting URLs from: {url_to_visit}")
     extracted_urls: List[str] = []
     try:
       page = await self.context.new_page()
@@ -72,12 +88,13 @@ class Crawler:
             "a[href]", "elements => elements.map(e => e.href)")
 
         for link in links:
-          if any(re.search(pattern, link) for pattern in PATTERNS):
+          if self._is_product_url(link):
+            print(f"Product URL: {link}")
             self.product_urls.add(link)
-          else:
+          elif link not in self.visited_urls and not self._is_out_of_domain(
+            link) and not self._is_ignore_url(link):
             extracted_urls.append(link)
 
-        print(f'Scrolling')
         # Try to scroll for infinite scrolling
         previous_height: int = await page.evaluate("document.body.scrollHeight"
                                                    )
@@ -85,8 +102,7 @@ class Crawler:
         await asyncio.sleep(2)  # Wait for new content to load
         new_height: int = await page.evaluate("document.body.scrollHeight")
         if new_height == previous_height:
-          print('Stop scolling')
-          break
+           break
 
       await page.close()
     except Exception as e:
@@ -94,23 +110,25 @@ class Crawler:
 
     return extracted_urls
 
+  def _is_product_url(self, url: str) -> bool:
+    return any(re.search(pattern, url) for pattern in PRODUCT_PATTERNS)
   def _is_out_of_domain(self, url: str) -> bool:
     return urlparse(url).netloc.replace('www.', '') != urlparse(
         self.base_url).netloc.replace('www.', '')
 
+  def _is_ignore_url(self, url: str) -> bool:
+    return any(re.search(pattern, url) for pattern in PATTERNS_TO_IGNORE)
+
   async def dequeue_and_visit(self):
     url_to_goto: str = await self.crawl_queue.get()
     if url_to_goto in self.visited_urls or self._is_out_of_domain(
-        url_to_goto):
-      print(f"Skipping URL: {url_to_goto}")
+        url_to_goto) or self._is_ignore_url(url_to_goto):
       return
     extracted_urls: List[str] = await self.extract_urls(
         url_to_visit=url_to_goto)
     self.visited_urls.add(url_to_goto)
     for extracted_url in extracted_urls:
-      if extracted_url not in self.visited_urls and not self._is_out_of_domain(
-          extracted_url):
-        await self.crawl_queue.put(extracted_url)
+      await self.crawl_queue.put(extracted_url)
     self.crawl_queue.task_done()
 
   async def crawl(self) -> List[str]:
@@ -120,12 +138,6 @@ class Crawler:
     await self.crawl_queue.put(self.base_url)
 
     while not self.crawl_queue.empty():
-      print(
-          f'URLs left to crawl: {self.crawl_queue.qsize()} for {self.base_url}'
-      )
-      print(
-          f'Product URLs: {len(self.product_urls)}, Already visited: {len(self.visited_urls)}'
-      )
       tasks = [
           asyncio.create_task(self.dequeue_and_visit())
           for _ in range(min(self.crawl_queue.qsize(), self.max_concurrent_tasks))
@@ -168,4 +180,4 @@ def crawl(domains: List[str]) -> List[str]:
   return director.execute_crawlers(domains)
 
 
-print(crawl(['zara.com/in', 'myntra.com']))
+print(crawl(['www.zara.com/in', 'myntra.com']))
