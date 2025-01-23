@@ -17,27 +17,39 @@ PATTERNS = [
 ]
 
 
-@dataclass
-class ExtractedURL:
-  url: str
-  parent: str
-
-
 class Crawler:
 
   def __init__(self, domain: str, max_concurrent_tasks: int = 50) -> None:
-    self.domain: str = domain
+    self.domain: str = self._normalize_domain(domain)
     self.max_concurrent_tasks: int = max_concurrent_tasks
     self.base_url: str = f"https://{domain}"
     self.product_urls: set[str] = set()
     self.context = None
-    self.crawl_queue: asyncio.Queue[ExtractedURL] = asyncio.Queue()
+    self.crawl_queue: asyncio.Queue[str] = asyncio.Queue()
     self.visited_urls: set = set()
+
+  @staticmethod
+  def _normalize_domain(domain: str) -> str:
+    domain = domain.lower().strip()
+    domain = re.sub(r'^https?://', '', domain)
+    domain = re.sub(r'^www\.', '', domain)
+    return domain
 
   async def setup_browser(self) -> None:
     self.playwright = await async_playwright().start()
     self.browser = await self.playwright.firefox.launch(headless=True)
-    self.context = await self.browser.new_context()
+    self.context = await self.browser.new_context(
+      viewport={'width': 1920, 'height': 1080},
+      java_script_enabled=True,
+      ignore_https_errors=True,
+      extra_http_headers={
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1'
+      })
 
   async def close_browser(self) -> None:
     if self.browser:
@@ -45,9 +57,9 @@ class Crawler:
     if self.playwright:
       await self.playwright.stop()
 
-  async def extract_urls(self, url_to_visit: str) -> List[ExtractedURL]:
+  async def extract_urls(self, url_to_visit: str) -> List[str]:
     print(f"Extracting URLs from: {url_to_visit}")
-    extracted_urls: List[ExtractedURL] = []
+    extracted_urls: List[str] = []
     try:
       page = await self.context.new_page()
 
@@ -63,7 +75,7 @@ class Crawler:
           if any(re.search(pattern, link) for pattern in PATTERNS):
             self.product_urls.add(link)
           else:
-            extracted_urls.append(ExtractedURL(url=link, parent=url_to_visit))
+            extracted_urls.append(link)
 
         print(f'Scrolling')
         # Try to scroll for infinite scrolling
@@ -87,18 +99,17 @@ class Crawler:
         self.base_url).netloc.replace('www.', '')
 
   async def dequeue_and_visit(self):
-    url_to_goto: ExtractedURL = await self.crawl_queue.get()
-    # print(f'URLs left to crawl: {self.crawl_queue.qsize()}')
-    if url_to_goto.url in self.visited_urls or self._is_out_of_domain(
-        url_to_goto.url):
-      print(f"Skipping URL: {url_to_goto.url}")
+    url_to_goto: str = await self.crawl_queue.get()
+    if url_to_goto in self.visited_urls or self._is_out_of_domain(
+        url_to_goto):
+      print(f"Skipping URL: {url_to_goto}")
       return
-    extracted_urls: List[ExtractedURL] = await self.extract_urls(
-        url_to_visit=url_to_goto.url)
-    self.visited_urls.add(url_to_goto.url)
+    extracted_urls: List[str] = await self.extract_urls(
+        url_to_visit=url_to_goto)
+    self.visited_urls.add(url_to_goto)
     for extracted_url in extracted_urls:
-      if extracted_url.url not in self.visited_urls and not self._is_out_of_domain(
-          extracted_url.url):
+      if extracted_url not in self.visited_urls and not self._is_out_of_domain(
+          extracted_url):
         await self.crawl_queue.put(extracted_url)
     self.crawl_queue.task_done()
 
@@ -106,7 +117,7 @@ class Crawler:
     if not self.context:
       await self.setup_browser()
 
-    await self.crawl_queue.put(ExtractedURL(url=self.base_url, parent=None))
+    await self.crawl_queue.put(self.base_url)
 
     while not self.crawl_queue.empty():
       print(
