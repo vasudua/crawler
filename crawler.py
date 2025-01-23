@@ -36,7 +36,7 @@ class Crawler:
 
   async def setup_browser(self) -> None:
     self.playwright = await async_playwright().start()
-    self.browser = await self.playwright.chromium.launch(headless=False)
+    self.browser = await self.playwright.firefox.launch(headless=True)
     self.context = await self.browser.new_context()
 
   async def close_browser(self) -> None:
