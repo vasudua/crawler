@@ -1,9 +1,30 @@
-[tool.yapf]
-indent_width = 2
-
 [build-system]
 requires = ["setuptools>=42.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "crawler"
+version = "0.1.0"
+description = "A high-performance, concurrent web crawler for e-commerce websites"
+requires-python = ">=3.9"
+dependencies = [
+    "playwright>=1.30.0",
+    "asyncio>=3.4.3",
+    "aiohttp>=3.8.0",
+    "beautifulsoup4>=4.9.3",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.10.0",
+    "pytest-playwright>=0.6.0",
+]
+dev = [
+    "yapf>=0.32.0",
+    "pdoc3>=0.10.0",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -11,14 +32,5 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_fixture_loop_scope = "function"
 
-[project]
-name = "crawler"
-version = "0.1.0"
-requires-python = ">=3.9"
-
-[project.optional-dependencies]
-test = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-mock>=3.10.0"
-]
+[tool.yapf]
+indent_width = 2 
