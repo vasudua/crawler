@@ -159,4 +159,5 @@ Potential enhancements:
 5. Rate limiting
 6. Proxy support 
 7. Cycle Detection
-8. Persisting URLs in a Database
+8. Geolocation based redirection
+9. Persisting URLs in a Database
