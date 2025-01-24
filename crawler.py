@@ -35,6 +35,9 @@ PATTERNS_TO_IGNORE = [
   re.compile(r'(.*/(order).*)'),
   re.compile(r'(.*/(return).*)'),
   re.compile(r'(.*/(track).*)'),
+  re.compile(r'.*/(news).*'),
+  re.compile(r'.*(customer).*'),
+  re.compile(r'.*(privacy).*')
 ]
 
 
@@ -55,6 +58,13 @@ class Crawler:
     domain = re.sub(r'^https?://', '', domain)
     domain = re.sub(r'^www\.', '', domain)
     return domain
+  
+  @staticmethod
+  def _normalize_url(url: str) -> str:
+    url = url.lower().strip()
+    # Remove everything after # in URL
+    url = re.sub(r'#.*$', '', url)
+    return url
 
   async def setup_browser(self) -> None:
     self.playwright = await async_playwright().start()
@@ -79,6 +89,7 @@ class Crawler:
       await self.playwright.stop()
 
   async def extract_urls(self, url_to_visit: str) -> List[str]:
+    logging.info(f"Extracting URLs from {url_to_visit}")
     extracted_urls: List[str] = []
     try:
       page = await self.context.new_page()
@@ -116,6 +127,7 @@ class Crawler:
 
   def _is_product_url(self, url: str) -> bool:
     return any(re.search(pattern, url) for pattern in PRODUCT_PATTERNS)
+
   def _is_out_of_domain(self, url: str) -> bool:
     return urlparse(url).netloc.replace('www.', '') != urlparse(
         self.base_url).netloc.replace('www.', '')
@@ -125,6 +137,7 @@ class Crawler:
 
   async def dequeue_and_visit(self):
     url_to_goto: str = await self.crawl_queue.get()
+    url_to_goto = self._normalize_url(url_to_goto)
     if url_to_goto in self.visited_urls or self._is_out_of_domain(
         url_to_goto) or self._is_ignore_url(url_to_goto):
       return
@@ -164,6 +177,8 @@ class CrawlDirector:
       try:
         urls: List[str] = await crawler.crawl()
         results.extend(urls)
+      except Exception as e:
+        logging.error(f"Error crawling {domain}: {e}")
       finally:
         await crawler.close_browser()
       return urls
@@ -177,6 +192,7 @@ class CrawlDirector:
       for future in as_completed(futures_to_url):
         domain = futures_to_url[future]
         results[domain] = future.result()
+        logging.info(f"Crawled {domain} with {len(results[domain])} products")
     with open('results.json', 'w') as f:
       json.dump(results, f)
     return results
@@ -187,4 +203,8 @@ def crawl(domains: List[str]) -> List[str]:
   return director.execute_crawlers(domains)
 
 
-print(crawl(['www.zara.com/in', 'myntra.com', 'ajio.com', 'www2.hm.com/en_in']))
+print(crawl([
+  'www.zara.com/in', 
+  'myntra.com', 
+  'ajio.com', 
+  'www2.hm.com/en_in']))
