@@ -152,7 +152,7 @@ Test coverage:
 ## Future Improvements
 
 Potential enhancements:
-1. Distributed crawling using Celery in conjunction with Kafka/RabbitMQ
+1. Distributed crawling using Celery in conjunction with Kafka/RabbitMQ & making it stateless.
 2. Custom result processors
 3. Advanced pattern matching
 4. Performance monitoring
